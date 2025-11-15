@@ -142,7 +142,7 @@
         // !!! CRÍTICO: REEMPLAZA ESTA URL CON LA URL DE DESPLIEGUE DE TU APPS SCRIPT (Web App) !!!
         // !!! Ejemplo: const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz_URL_AQUI/exec';
         // !!! ----------------------------------------------------------------------------------- !!!
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-2Que8GcAvTUW9vawsq5BTXu4Hx_o56-G3Q0PUkJQRQ6qdsJxk7iY3tU7l5uvFwrHrQ/exec'; 
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxV971XE954PlZJmAPKq0YMrVsPVBCyfYZMeLof-p03h5CVry1PTT0FSbioeRdH2cDQfw/exec'; 
 
         // Referencias del DOM
         const appContainer = document.getElementById('app-container');
@@ -186,15 +186,15 @@
 async function sendRequest(action, data) {
     // 1. Convertir el objeto de datos a formato de formulario (URLSearchParams)
     const formBody = new URLSearchParams({
-        action: action, // Aseguramos que la acción siempre va primero
-        ...data          // Incluimos el resto de los datos (username, password, etc.)
+        action: action, 
+        ...data         
     });
 
     const response = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        // ¡IMPORTANTE! ELIMINAMOS el encabezado 'Content-Type' para que el navegador lo establezca automáticamente
-        // body: JSON.stringify({ action, ...data }) // Antes
-        body: formBody.toString() // Ahora
+        // ¡IMPORTANTE! ELIMINAMOS el encabezado 'Content-Type: application/json'
+        // para que el navegador lo establezca automáticamente como URL-encoded.
+        body: formBody.toString() // Envía la data como un formulario
     });
 
                 if (!response.ok) {
