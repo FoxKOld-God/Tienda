@@ -142,7 +142,7 @@
         // !!! CRÍTICO: REEMPLAZA ESTA URL CON LA URL DE DESPLIEGUE DE TU APPS SCRIPT (Web App) !!!
         // !!! Ejemplo: const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz_URL_AQUI/exec';
         // !!! ----------------------------------------------------------------------------------- !!!
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzS86YP13ZG_WGdhbZQsJr0mSRPRPDqdbP79YLJZZh2qW4FhYxRDKyVvCJbw_ICKQ0AeQ/exec'; 
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-2Que8GcAvTUW9vawsq5BTXu4Hx_o56-G3Q0PUkJQRQ6qdsJxk7iY3tU7l5uvFwrHrQ/exec'; 
 
         // Referencias del DOM
         const appContainer = document.getElementById('app-container');
@@ -183,16 +183,19 @@
          * @param {string} action - La función del lado de Apps Script a llamar (ej: 'login', 'getInventory').
          * @param {object} data - Los datos a enviar al backend.
          */
-        async function sendRequest(action, data = {}) {
-            loadingIndicator.classList.remove('hidden');
-            
-            try {
-                // Configuración de la petición
-                const response = await fetch(APPS_SCRIPT_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action, ...data }) // Envía la acción y los datos
-                });
+async function sendRequest(action, data) {
+    // 1. Convertir el objeto de datos a formato de formulario (URLSearchParams)
+    const formBody = new URLSearchParams({
+        action: action, // Aseguramos que la acción siempre va primero
+        ...data          // Incluimos el resto de los datos (username, password, etc.)
+    });
+
+    const response = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        // ¡IMPORTANTE! ELIMINAMOS el encabezado 'Content-Type' para que el navegador lo establezca automáticamente
+        // body: JSON.stringify({ action, ...data }) // Antes
+        body: formBody.toString() // Ahora
+    });
 
                 if (!response.ok) {
                     throw new Error(`Error HTTP: ${response.status}`);
