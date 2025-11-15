@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Inventario y Pedidos (Apps Script)</title>
+    <!-- Carga de Tailwind CSS para un diseño moderno y responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <!-- Indicador de Carga Inicial -->
+    <div id="loading-indicator" class="fixed inset-0 bg-white bg-opacity-80 flex items-center justify-center z-50">
+        <div class="text-xl font-semibold text-rose-600 animate-pulse">Cargando aplicación...</div>
+    </div>
+
+    <!-- START: Login Modal (Pantalla de Acceso) -->
+    <div id="login-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-40 hidden">
+        <div class="bg-white p-8 rounded-xl card max-w-sm w-full">
+            <h2 class="text-2xl font-bold text-rose-800 mb-6 text-center">Acceso al Inventario</h2>
+            <form id="login-form" class="space-y-4">
+                <input type="text" id="login-username" placeholder="Usuario" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                <input type="password" id="login-password" placeholder="Contraseña" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                <p id="login-error" class="text-sm text-red-600 hidden text-center font-medium">Usuario o contraseña incorrectos.</p>
+                <button type="submit" class="w-full bg-rose-600 text-white p-3 rounded-lg font-semibold hover:bg-rose-700 transition duration-150">Iniciar Sesión</button>
+            </form>
+            <p class="mt-4 text-sm text-center text-gray-500">
+                Credenciales de prueba: Usuario <span class="font-bold">kiosco</span> | Contraseña <span class="font-bold">coca</span>
+            </p>
+        </div>
+    </div>
+    <!-- END: Login Modal -->
+
+    <main id="app-container" class="max-w-7xl mx-auto hidden">
+        <!-- Título principal -->
+        <h1 class="text-3xl md:text-4xl font-extrabold text-rose-800 mb-6 border-b pb-2">Inventario Kiosko Coca-Cola (Google Sheets Backend)</h1>
+        
+        <!-- ID del Usuario Autenticado (Simplificado) -->
+        <div class="text-sm text-gray-600 mb-4 p-3 bg-gray-100 rounded-lg">
+            <span class="font-semibold">Usuario Activo:</span> <span id="user-id-display">N/A</span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Columna de Formularios (Acciones) -->
+            <div class="lg:col-span-1 space-y-8">
+                
+                <!-- 1. Añadir Nuevo Producto -->
+                <div class="card bg-white p-6 rounded-xl border border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-700 mb-4">1. Añadir Nuevo Producto</h2>
+                    <form id="product-form" class="space-y-4">
+                        <input type="text" id="product-name" placeholder="Nombre del Producto" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                        <input type="number" id="product-stock" placeholder="Stock Inicial" required min="0" value="0" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                        <input type="number" id="reorder-threshold" placeholder="Umbral de Reorden (ej: 10)" required min="1" value="10" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                        <input type="number" id="order-quantity" placeholder="Cantidad a Pedir (ej: 50)" required min="1" value="50" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                        <button type="submit" class="w-full bg-rose-600 text-white p-3 rounded-lg font-semibold hover:bg-rose-700 transition duration-150">Guardar Producto</button>
+                    </form>
+                </div>
+
+                <!-- 2. Registrar Entrada (Stock In) -->
+                <div class="card bg-white p-6 rounded-xl border border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-700 mb-4">2. Registrar Entrada de Stock</h2>
+                    <form id="stock-in-form" class="space-y-4">
+                        <select id="in-product-select" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                            <option value="">-- Seleccionar Producto --</option>
+                        </select>
+                        <input type="number" id="in-quantity" placeholder="Cantidad de Entrada" required min="1" value="1" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                        <button type="submit" class="w-full bg-green-600 text-white p-3 rounded-lg font-semibold hover:bg-green-700 transition duration-150">Registrar Entrada</button>
+                    </form>
+                </div>
+
+                <!-- 3. Registrar Salida (Stock Out) -->
+                <div class="card bg-white p-6 rounded-xl border border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-700 mb-4">3. Registrar Salida de Stock</h2>
+                    <form id="stock-out-form" class="space-y-4">
+                        <select id="out-product-select" required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                            <option value="">-- Seleccionar Producto --</option>
+                        </select>
+                        <input type="number" id="out-quantity" placeholder="Cantidad de Salida" required min="1" value="1" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-rose-500 focus:border-rose-500">
+                        <button type="submit" class="w-full bg-rose-900 text-white p-3 rounded-lg font-semibold hover:bg-rose-800 transition duration-150">Registrar Salida</button>
+                    </form>
+                </div>
+
+            </div>
+
+            <!-- Columna de Vistas de Datos (Inventario y Pedidos) -->
+            <div class="lg:col-span-2 space-y-8">
+
+                <!-- Vista de Inventario -->
+                <div class="card bg-white p-6 rounded-xl border border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-700 mb-4">Inventario Actual de Productos</h2>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Umbral Reorden</th>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pedir Cant.</th>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-list" class="bg-white divide-y divide-gray-200">
+                                <!-- Filas de productos se insertarán aquí -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Vista de Pedidos Pendientes (Basada en la tabla de inventario) -->
+                <div class="card bg-white p-6 rounded-xl border border-gray-200">
+                    <h2 class="text-xl font-bold text-gray-700 mb-4 flex justify-between items-center">
+                        <span>Pedidos Pendientes al Proveedor</span>
+                        <span id="order-count" class="text-xs font-semibold bg-red-100 text-red-800 px-3 py-1 rounded-full">0 Pendientes</span>
+                    </h2>
+                    <div id="orders-list" class="space-y-3">
+                        <p id="no-orders" class="text-gray-500 italic">No hay pedidos pendientes en este momento.</p>
+                        <!-- Tarjetas de pedidos se insertarán aquí -->
+                    </div>
+                </div>
+                
+                <!-- Mensaje de Notificación (en lugar de alert) -->
+                <div id="notification-message" class="fixed bottom-4 right-4 bg-rose-600 text-white p-4 rounded-lg shadow-lg hidden"></div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Script de Lógica de la Aplicación (Apps Script) -->
+    <script type="module">
+        
+        // !!! ----------------------------------------------------------------------------------- !!!
+        // !!! CRÍTICO: REEMPLAZA ESTA URL CON LA URL DE DESPLIEGUE DE TU APPS SCRIPT (Web App) !!!
+        // !!! Ejemplo: const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz_URL_AQUI/exec';
+        // !!! ----------------------------------------------------------------------------------- !!!
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzzP3O4gSkmiEQ_xJI9mwCiARHe_xB-t8VsQAxZ4-s5oIta0A2vMw1shcn-nAPduMvRpg/exec'; 
+
+        // Referencias del DOM
+        const appContainer = document.getElementById('app-container');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const loginModal = document.getElementById('login-modal');
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const inProductSelect = document.getElementById('in-product-select');
+        const outProductSelect = document.getElementById('out-product-select');
+        const inventoryList = document.getElementById('inventory-list');
+        const ordersList = document.getElementById('orders-list');
+        const noOrdersMessage = document.getElementById('no-orders');
+        const orderCountDisplay = document.getElementById('order-count');
+        const notificationMessage = document.getElementById('notification-message');
+
+        let currentUsername = null;
+        let inventoryData = [];
+
+        // --- FUNCIONES DE UTILIDAD Y NOTIFICACIÓN ---
+
+        /**
+         * Muestra un mensaje de notificación flotante (reemplaza a alert).
+         */
+        function showNotification(message, isError = false) {
+            notificationMessage.textContent = message;
+            // Manejo de clases para mostrar/ocultar y cambiar color (éxito vs. error)
+            notificationMessage.classList.remove('hidden', 'bg-rose-600', 'bg-red-600');
+            notificationMessage.classList.add(isError ? 'bg-red-600' : 'bg-rose-600');
+            
+            setTimeout(() => {
+                notificationMessage.classList.add('hidden');
+            }, 3000);
+        }
+
+        /**
+         * Envía una petición POST al Apps Script (el backend).
+         * @param {string} action - La función del lado de Apps Script a llamar (ej: 'login', 'getInventory').
+         * @param {object} data - Los datos a enviar al backend.
+         */
+        async function sendRequest(action, data = {}) {
+            loadingIndicator.classList.remove('hidden');
+            
+            try {
+                // Configuración de la petición
+                const response = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, ...data }) // Envía la acción y los datos
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                // Si el backend devuelve success: false, lanzamos un error
+                if (!result.success) {
+                    throw new Error(result.message || 'La operación falló en el servidor.');
+                }
+                
+                return result;
+
+            } catch (error) {
+                console.error("Error en la petición:", error);
+                showNotification(`Error: ${error.message}`, true); // Muestra error al usuario
+                throw error; // Propagar el error para que los manejadores de formulario puedan reaccionar
+            } finally {
+                loadingIndicator.classList.add('hidden'); // Ocultar el indicador de carga
+            }
+        }
+        
+        // --- FUNCIONES DE RENDERIZADO (UI) ---
+
+        /**
+         * Renderiza la lista de productos en la tabla de inventario y la guarda localmente.
+         * @param {Array} products - Lista de objetos de producto.
+         */
+        function renderInventory(products) {
+            inventoryData = products; // Guardar datos para usar en los selectores y pedidos
+            inventoryList.innerHTML = '';
+            
+            if (products.length === 0) {
+                inventoryList.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-gray-500 italic">No hay productos registrados.</td></tr>`;
+                return;
+            }
+
+            products.sort((a, b) => a.name.localeCompare(b.name)).forEach(product => {
+                const isLowStock = product.stock <= product.reorderThreshold;
+                const statusClass = isLowStock ? 'bg-red-50 text-red-700 font-bold' : 'bg-green-50 text-green-700';
+                const statusText = isLowStock ? '¡Stock Bajo!' : 'OK';
+
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${product.name}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${product.stock}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${product.reorderThreshold}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${product.orderQuantity}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm">
+                        <span class="px-2 inline-flex text-xs leading-5 rounded-full ${statusClass}">${statusText}</span>
+                    </td>
+                `;
+                inventoryList.appendChild(row);
+            });
+            
+            updateProductSelects(products);
+            renderOrders(products); // Renderizar pedidos basados en el inventario
+        }
+
+        /**
+         * Actualiza los selectores de producto para Entradas y Salidas con el stock actual.
+         */
+        function updateProductSelects(products) {
+            let optionsHtml = '<option value="">-- Seleccionar Producto --</option>';
+            products.sort((a, b) => a.name.localeCompare(b.name)).forEach(product => {
+                optionsHtml += `<option value="${product.name}">${product.name} (Stock: ${product.stock})</option>`;
+            });
+            inProductSelect.innerHTML = optionsHtml;
+            outProductSelect.innerHTML = optionsHtml;
+        }
+
+        /**
+         * Renderiza la lista de pedidos pendientes (productos con stock bajo).
+         */
+        function renderOrders(products) {
+            ordersList.innerHTML = '';
+            // Filtra los productos donde el stock es menor o igual al umbral de reorden
+            const pendingOrders = products.filter(p => p.stock <= p.reorderThreshold);
+            
+            pendingOrders.sort((a, b) => a.name.localeCompare(b.name)).forEach(order => {
+                const orderCard = document.createElement('div');
+                orderCard.className = 'p-4 bg-orange-50 rounded-lg border border-orange-200 flex justify-between items-center';
+                orderCard.innerHTML = `
+                    <div>
+                        <p class="font-bold text-lg text-orange-800">${order.name}</p>
+                        <p class="text-sm text-orange-700">Stock Actual: ${order.stock}</p>
+                        <p class="text-sm text-orange-700">Cantidad Solicitada: <span class="font-semibold">${order.orderQuantity}</span></p>
+                    </div>
+                    <!-- Botón para registrar la entrada del pedido (automáticamente Stock In) -->
+                    <button data-product-name="${order.name}" data-quantity="${order.orderQuantity}" class="complete-order-btn bg-orange-600 text-white text-xs px-3 py-2 rounded-lg font-medium hover:bg-orange-700 transition duration-150">Recibir Pedido (+${order.orderQuantity})</button>
+                `;
+                ordersList.appendChild(orderCard);
+            });
+
+            // Mostrar/ocultar el mensaje de "no hay pedidos"
+            if (pendingOrders.length > 0) {
+                noOrdersMessage.classList.add('hidden');
+            } else {
+                noOrdersMessage.classList.remove('hidden');
+            }
+            // Actualizar el contador de pedidos
+            orderCountDisplay.textContent = `${pendingOrders.length} Pendientes`;
+
+            // Agregar manejador de eventos al nuevo botón de "Recibir Pedido"
+            document.querySelectorAll('.complete-order-btn').forEach(button => {
+                button.addEventListener('click', handleReceiveOrder);
+            });
+        }
+        
+        // --- MANEJADORES DE EVENTOS Y ACCIONES DE DATOS ---
+
+        /**
+         * Carga los datos del inventario desde Apps Script.
+         */
+        async function fetchInventory() {
+            try {
+                const result = await sendRequest('getInventory');
+                renderInventory(result.products);
+                // No mostrar notificación de éxito para evitar spam al cargar
+            } catch (error) {
+                console.error("Fallo al obtener el inventario:", error);
+            }
+        }
+
+        /**
+         * Maneja el formulario de Login (autenticación simple).
+         */
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value.trim();
+            
+            try {
+                // Llama a la acción 'login' en Apps Script
+                const result = await sendRequest('login', { username, password });
+                
+                // Login exitoso
+                currentUsername = username;
+                userIdDisplay.textContent = currentUsername;
+                loginModal.classList.add('hidden');
+                appContainer.classList.remove('hidden');
+                
+                showNotification(`¡Bienvenido, ${currentUsername}! Inventario cargado.`);
+                await fetchInventory(); // Cargar datos después del login
+
+            } catch (error) {
+                // Error manejado en sendRequest, solo mostramos el mensaje de error del formulario
+                loginError.classList.remove('hidden');
+            }
+        });
+
+        /**
+         * 1. Maneja el formulario de Añadir Nuevo Producto (o actualizar si ya existe).
+         */
+        document.getElementById('product-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('product-name').value.trim();
+            const stock = parseInt(document.getElementById('product-stock').value, 10);
+            const reorderThreshold = parseInt(document.getElementById('reorder-threshold').value, 10);
+            const orderQuantity = parseInt(document.getElementById('order-quantity').value, 10);
+
+            try {
+                await sendRequest('addProduct', { name, stock, reorderThreshold, orderQuantity });
+                showNotification(`Producto '${name}' añadido/actualizado.`);
+                await fetchInventory(); // Recargar inventario
+                e.target.reset(); // Limpiar formulario
+                document.getElementById('product-stock').value = 0;
+                document.getElementById('reorder-threshold').value = 10;
+                document.getElementById('order-quantity').value = 50;
+            } catch (error) {
+                // Errores manejados en sendRequest
+            }
+        });
+
+        /**
+         * 2. Maneja el formulario de Entrada de Stock (Stock In).
+         */
+        document.getElementById('stock-in-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const productName = inProductSelect.value;
+            const quantity = parseInt(document.getElementById('in-quantity').value, 10);
+
+            if (!productName || quantity <= 0) {
+                showNotification("Selecciona un producto y una cantidad válida.", true);
+                return;
+            }
+
+            try {
+                // Llama a la acción 'updateStock' con tipo 'in'
+                await sendRequest('updateStock', { productName, quantity, type: 'in' });
+                showNotification(`Entrada de ${quantity} unidades de ${productName} registrada.`);
+                await fetchInventory();
+                e.target.reset();
+                document.getElementById('in-quantity').value = 1;
+            } catch (error) {
+                 // Errores manejados en sendRequest
+            }
+        });
+
+        /**
+         * 3. Maneja el formulario de Salida de Stock (Stock Out).
+         */
+        document.getElementById('stock-out-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const productName = outProductSelect.value;
+            const quantity = parseInt(document.getElementById('out-quantity').value, 10);
+
+            if (!productName || quantity <= 0) {
+                 showNotification("Selecciona un producto y una cantidad válida.", true);
+                return;
+            }
+
+            try {
+                // Llama a la acción 'updateStock' con tipo 'out'
+                await sendRequest('updateStock', { productName, quantity, type: 'out' });
+                showNotification(`Salida de ${quantity} unidades de ${productName} registrada.`);
+                await fetchInventory();
+                e.target.reset();
+                document.getElementById('out-quantity').value = 1;
+            } catch (error) {
+                // Errores manejados en sendRequest
+            }
+        });
+        
+        /**
+         * Maneja la acción de "Recibir Pedido" (acción rápida en la sección de Pedidos).
+         */
+        async function handleReceiveOrder(e) {
+            const productName = e.currentTarget.getAttribute('data-product-name');
+            const quantity = parseInt(e.currentTarget.getAttribute('data-quantity'), 10);
+
+            try {
+                // Esto es una entrada de stock
+                await sendRequest('updateStock', { productName, quantity, type: 'in' });
+                showNotification(`Pedido de ${quantity} unidades de ${productName} recibido y stock actualizado.`);
+                await fetchInventory(); // Recargar para actualizar la lista de pedidos
+            } catch (error) {
+                // Errores manejados en sendRequest
+            }
+        }
+
+
+        // Mostrar el modal de login al cargar la página
+        window.onload = function() {
+            loadingIndicator.classList.add('hidden');
+            loginModal.classList.remove('hidden');
+        };
+    </script>
+
+</body>
+</html>
