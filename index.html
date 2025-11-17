@@ -184,44 +184,38 @@
          * @param {object} data - Los datos a enviar al backend.
          */
 async function sendRequest(action, data) {
-  // 1. Convertir el objeto de datos a formato de formulario (URLSearchParams)
-  const formBody = new URLSearchParams({
-      action: action,
-      ...data
-  });
-  
-  const response = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      // **CORRECCIÓN CLAVE:** ELIMINAMOS la cabecera Content-Type.
-      // El navegador la establecerá automáticamente como application/x-www-form-urlencoded
-      // al enviar un objeto URLSearchParams. ¡Esto evita el preflight CORS!
-      // Si la dejas, generará el error 405.
-      body: formBody.toString() // Envía la data como un formulario
-  });
-  // ... (el resto de la función: if (!response.ok), await response.json(), etc.)
-}
+    // 1. Convertir el objeto de datos a formato de formulario (URLSearchParams)
+    const formBody = new URLSearchParams({
+        action: action,
+        ...data
+    });
+    
+    try { // AÑADIR TRY AQUI
+        const response = await fetch(APPS_SCRIPT_URL, {
+            method: 'POST',
+            body: formBody.toString() // Envía la data como un formulario
+        });
 
-                if (!response.ok) {
-                    throw new Error(`Error HTTP: ${response.status}`);
-                }
-
-                const result = await response.json();
-                
-                // Si el backend devuelve success: false, lanzamos un error
-                if (!result.success) {
-                    throw new Error(result.message || 'La operación falló en el servidor.');
-                }
-                
-                return result;
-
-            } catch (error) {
-                console.error("Error en la petición:", error);
-                showNotification(`Error: ${error.message}`, true); // Muestra error al usuario
-                throw error; // Propagar el error para que los manejadores de formulario puedan reaccionar
-            } finally {
-                loadingIndicator.classList.add('hidden'); // Ocultar el indicador de carga
-            }
+        if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
         }
+
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || 'La operación falló en el servidor.');
+        }
+        
+        return result;
+
+    } catch (error) {
+        console.error("Error en la petición:", error);
+        showNotification(`Error: ${error.message}`, true); 
+        throw error; 
+    } finally {
+        loadingIndicator.classList.add('hidden'); // Ocultar el indicador de carga
+    }
+} // <<-- Cierre de la función sendRequest
         
         // --- FUNCIONES DE RENDERIZADO (UI) ---
 
