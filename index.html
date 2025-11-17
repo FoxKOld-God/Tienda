@@ -142,7 +142,7 @@
         // !!! CRÍTICO: REEMPLAZA ESTA URL CON LA URL DE DESPLIEGUE DE TU APPS SCRIPT (Web App) !!!
         // !!! Ejemplo: const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz_URL_AQUI/exec';
         // !!! ----------------------------------------------------------------------------------- !!!
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxxe3SlqttWEWorIUQdbooA6XlP9i53Zbo584GZCnX4a1GXXvO7YOT_nBUf1OsWjcwo3A/exec'; 
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzlihKvgB6L-hKn1R2X1mfZnQlHWZu0aF8MDGpgrq47yJxyU8yo8iowOeXV6y1nTsDVpw/exec'; 
 
         // Referencias del DOM
         const appContainer = document.getElementById('app-container');
@@ -189,11 +189,12 @@ async function sendRequest(action, data) {
         action: action,
         ...data
     });
-    
-    try { // AÑADIR TRY AQUI
+
+    try {
         const response = await fetch(APPS_SCRIPT_URL, {
             method: 'POST',
-            body: formBody.toString() // Envía la data como un formulario
+            // **CLAVE:** ELIMINAMOS el encabezado Content-Type para usar URL-Encoded
+            body: formBody.toString()
         });
 
         if (!response.ok) {
@@ -201,7 +202,8 @@ async function sendRequest(action, data) {
         }
 
         const result = await response.json();
-        
+
+        // Si el backend devuelve success: false, lanzamos un error
         if (!result.success) {
             throw new Error(result.message || 'La operación falló en el servidor.');
         }
@@ -210,12 +212,13 @@ async function sendRequest(action, data) {
 
     } catch (error) {
         console.error("Error en la petición:", error);
-        showNotification(`Error: ${error.message}`, true); 
-        throw error; 
+        showNotification(`Error: ${error.message}`, true); // Muestra error al usuario
+        throw error; // Propagar el error
     } finally {
         loadingIndicator.classList.add('hidden'); // Ocultar el indicador de carga
     }
-} // <<-- Cierre de la función sendRequest
+} 
+// ¡Asegúrate de que este sea el cierre correcto de la función!
         
         // --- FUNCIONES DE RENDERIZADO (UI) ---
 
